@@ -1,0 +1,318 @@
+.mood-tracker-container {
+  padding: 24px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.mood-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+}
+
+.header-content h2 {
+  margin: 0 0 8px;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #fff;
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+.header-content p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1rem;
+}
+
+.streak-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 20px;
+  color: #c4b5fd;
+  font-size: 0.9rem;
+}
+
+.success-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.success-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 30px rgba(34, 197, 94, 0.4);
+}
+
+.success-message h3 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+  color: #fff;
+}
+
+.success-message p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.mood-selection {
+  margin-bottom: 32px;
+}
+
+.mood-selection h3,
+.emotions-section h3,
+.note-section h3 {
+  margin: 0 0 16px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mood-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.mood-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 16px;
+  min-width: 90px;
+  border-radius: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.mood-btn:hover {
+  border-color: var(--mood-color);
+  color: var(--mood-color);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mood-btn.selected {
+  background: var(--mood-gradient);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.mood-btn span {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.emotions-section {
+  margin-bottom: 28px;
+}
+
+.emotion-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.emotion-tag {
+  padding: 10px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.emotion-tag:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.emotion-tag.selected {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-color: transparent;
+  color: white;
+}
+
+.note-section {
+  margin-bottom: 28px;
+}
+
+.note-section textarea {
+  width: 100%;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  font-size: 1rem;
+  resize: none;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.note-section textarea:focus {
+  outline: none;
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.note-section textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 16px 24px;
+  border-radius: 16px;
+  border: none;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+}
+
+.submit-btn:hover:not(:disabled) {
+  box-shadow: 0 15px 40px rgba(99, 102, 241, 0.4);
+  transform: translateY(-2px);
+}
+
+.submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mood-chart-section {
+  margin-top: 40px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.chart-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: white;
+}
+
+.trend-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.chart-container {
+  margin: 0 -10px;
+}
+
+.patterns-section {
+  margin-top: 24px;
+}
+
+.patterns-section h3 {
+  margin: 0 0 16px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: white;
+}
+
+.pattern-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.pattern-card {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pattern-label {
+  display: block;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 8px;
+}
+
+.pattern-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #c4b5fd;
+}
+
+.common-emotions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.emotion-chip {
+  padding: 4px 12px;
+  background: rgba(139, 92, 246, 0.2);
+  border-radius: 12px;
+  font-size: 0.8rem;
+  color: #c4b5fd;
+}
+
+@media (max-width: 500px) {
+  .mood-buttons {
+    justify-content: space-between;
+  }
+  
+  .mood-btn {
+    min-width: 60px;
+    padding: 14px 10px;
+  }
+  
+  .mood-btn span {
+    font-size: 0.75rem;
+  }
+  
+  .pattern-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
