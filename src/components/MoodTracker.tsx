@@ -78,31 +78,36 @@ const MoodTracker: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedMood || !user) return;
+    if (!selectedMood || !user || isSubmitting) return;
     
     setIsSubmitting(true);
     
-    const entry: Omit<MoodEntry, 'id'> = {
-      userId: user.id,
-      mood: selectedMood,
-      moodLabel: MOODS.find(m => m.value === selectedMood)?.label || '',
-      emotions: selectedEmotions,
-      note: note.trim() || undefined,
-      timestamp: new Date()
-    };
-    
-    await saveMoodEntry(entry);
-    
-    setShowSuccess(true);
-    setTimeout(() => {
-      setShowSuccess(false);
-      setSelectedMood(null);
-      setSelectedEmotions([]);
-      setNote('');
-      loadMoodData();
-    }, 2000);
-    
-    setIsSubmitting(false);
+    try {
+      const entry: Omit<MoodEntry, 'id'> = {
+        userId: user.id,
+        mood: selectedMood,
+        moodLabel: MOODS.find(m => m.value === selectedMood)?.label || '',
+        emotions: selectedEmotions,
+        note: note.trim() || undefined,
+        timestamp: new Date()
+      };
+      
+      await saveMoodEntry(entry);
+      
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        setSelectedMood(null);
+        setSelectedEmotions([]);
+        setNote('');
+        loadMoodData();
+      }, 2000);
+    } catch (error) {
+      console.error('Error submitting mood entry:', error);
+      // Optional: surface a gentle UI message here if desired
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getChartData = () => {

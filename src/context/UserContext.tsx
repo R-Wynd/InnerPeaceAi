@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../config/firebase';
 import { v4 as uuidv4 } from 'uuid';
 
 interface User {
@@ -36,43 +38,120 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing user in localStorage
-    const savedUser = localStorage.getItem('innerpeace_user');
-    if (savedUser) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        setUser({
-          ...parsed,
-          createdAt: new Date(parsed.createdAt)
-        });
-      } catch (e) {
-        console.error('Error parsing saved user:', e);
-      }
-    }
-    setIsLoading(false);
+    let isMounted = true;
+    
+    const initializeUser = async () => {
+      console.log('[InnerPeace] Initializing user authentication...');
+      
+      // Try Firebase Auth first
+      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (!isMounted) return;
+        
+        const savedData = localStorage.getItem('innerpeace_user_data');
+        let userData: { name?: string; email?: string } = {};
+        if (savedData) {
+          try {
+            userData = JSON.parse(savedData);
+          } catch (e) {
+            console.error('[InnerPeace] Error parsing user data:', e);
+          }
+        }
+        
+        if (firebaseUser) {
+          // Firebase Auth user exists
+          console.log('[InnerPeace] ✓ Firebase Auth user:', firebaseUser.uid);
+          setUser({
+            id: firebaseUser.uid,
+            name: userData.name || 'User',
+            email: userData.email || '',
+            createdAt: new Date(firebaseUser.metadata.creationTime || Date.now())
+          });
+          setIsLoading(false);
+        } else {
+          // Try to sign in anonymously
+          try {
+            console.log('[InnerPeace] Attempting anonymous sign-in...');
+            const credential = await signInAnonymously(auth);
+            console.log('[InnerPeace] ✓ Anonymous sign-in successful:', credential.user.uid);
+            // onAuthStateChanged will be triggered with the new user
+          } catch (error: any) {
+            console.warn('[InnerPeace] Anonymous auth failed:', error.code);
+            console.log('[InnerPeace] Falling back to local UUID-based auth');
+            
+            // Fallback: use persistent UUID stored in localStorage
+            let fallbackId = localStorage.getItem('innerpeace_fallback_uid');
+            if (!fallbackId) {
+              fallbackId = uuidv4();
+              localStorage.setItem('innerpeace_fallback_uid', fallbackId);
+              console.log('[InnerPeace] ✓ Generated new fallback UID:', fallbackId);
+            } else {
+              console.log('[InnerPeace] ✓ Using existing fallback UID:', fallbackId);
+            }
+            
+            setUser({
+              id: fallbackId,
+              name: userData.name || 'User',
+              email: userData.email || '',
+              createdAt: new Date()
+            });
+            setIsLoading(false);
+          }
+        }
+      });
+
+      return unsubscribe;
+    };
+    
+    const unsubscribePromise = initializeUser();
+
+    return () => {
+      isMounted = false;
+      unsubscribePromise.then(unsub => unsub && unsub());
+    };
   }, []);
 
   const login = (name: string, email: string) => {
-    const newUser: User = {
-      id: uuidv4(),
-      name,
-      email,
-      createdAt: new Date()
-    };
-    setUser(newUser);
-    localStorage.setItem('innerpeace_user', JSON.stringify(newUser));
+    // Store name/email in localStorage (user.id comes from Firebase Auth)
+    const userData = { name, email };
+    localStorage.setItem('innerpeace_user_data', JSON.stringify(userData));
+    
+    if (user) {
+      // Update existing user with new name/email
+      const updatedUser = { ...user, name, email };
+      setUser(updatedUser);
+    }
   };
 
   const logout = () => {
-    setUser(null);
-    localStorage.removeItem('innerpeace_user');
+    // Clear user data but keep anonymous auth (or could call auth.signOut())
+    localStorage.removeItem('innerpeace_user_data');
+    if (user) {
+      setUser({
+        ...user,
+        name: 'User',
+        email: ''
+      });
+    }
   };
 
   const updateUser = (updates: Partial<User>) => {
     if (user) {
       const updatedUser = { ...user, ...updates };
       setUser(updatedUser);
-      localStorage.setItem('innerpeace_user', JSON.stringify(updatedUser));
+      // Update name/email in localStorage if provided
+      if (updates.name || updates.email) {
+        const savedData = localStorage.getItem('innerpeace_user_data');
+        let userData: { name?: string; email?: string } = {};
+        if (savedData) {
+          try {
+            userData = JSON.parse(savedData);
+          } catch (e) {
+            console.error('Error parsing user data:', e);
+          }
+        }
+        userData = { ...userData, ...updates };
+        localStorage.setItem('innerpeace_user_data', JSON.stringify(userData));
+      }
     }
   };
 

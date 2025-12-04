@@ -1,3 +1,72 @@
+/*
+ * Firestore Service for InnerPeace AI
+ * 
+ * IMPORTANT: Configure Firestore Security Rules
+ * 
+ * OPTION 1 - With Firebase Anonymous Auth (Recommended):
+ * Enable Anonymous Auth in Firebase Console > Authentication > Sign-in method, then use:
+ * 
+ * rules_version = '2';
+ * service cloud.firestore {
+ *   match /databases/{database}/documents {
+ *     function isSignedIn() {
+ *       return request.auth != null;
+ *     }
+ *     function isCreatingOwnDoc() {
+ *       return isSignedIn() && request.auth.uid == request.resource.data.userId;
+ *     }
+ *     function isOwnerOfExisting() {
+ *       return isSignedIn() && request.auth.uid == resource.data.userId;
+ *     }
+ *     match /moodEntries/{doc} {
+ *       allow create: if isCreatingOwnDoc();
+ *       allow read: if isOwnerOfExisting();
+ *       allow update, delete: if isOwnerOfExisting();
+ *     }
+ *     match /journalEntries/{doc} {
+ *       allow create: if isCreatingOwnDoc();
+ *       allow read: if isOwnerOfExisting();
+ *       allow update, delete: if isOwnerOfExisting();
+ *     }
+ *     match /chatSessions/{doc} {
+ *       allow create: if isCreatingOwnDoc();
+ *       allow read: if isOwnerOfExisting();
+ *       allow update, delete: if isOwnerOfExisting();
+ *     }
+ *   }
+ * }
+ * 
+ * OPTION 2 - Without Anonymous Auth (Fallback, less secure):
+ * If you can't enable Anonymous Auth yet, use this temporarily:
+ * 
+ * rules_version = '2';
+ * service cloud.firestore {
+ *   match /databases/{database}/documents {
+ *     function hasValidUserId() {
+ *       return request.resource.data.userId is string && 
+ *              request.resource.data.userId.size() > 0;
+ *     }
+ *     match /moodEntries/{doc} {
+ *       allow create: if hasValidUserId();
+ *       allow read, update, delete: if resource.data.userId == request.auth.uid ||
+ *                                       (request.auth == null && resource.data.userId is string);
+ *     }
+ *     match /journalEntries/{doc} {
+ *       allow create: if hasValidUserId();
+ *       allow read, update, delete: if resource.data.userId == request.auth.uid ||
+ *                                       (request.auth == null && resource.data.userId is string);
+ *     }
+ *     match /chatSessions/{doc} {
+ *       allow create: if hasValidUserId();
+ *       allow read, update, delete: if resource.data.userId == request.auth.uid ||
+ *                                       (request.auth == null && resource.data.userId is string);
+ *     }
+ *   }
+ * }
+ * 
+ * WARNING: Option 2 allows unauthenticated access. Use only for development/testing.
+ */
+
 import { 
   collection, 
   doc, 
@@ -23,22 +92,86 @@ const isDemoMode = () => {
   return !import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY === 'demo-api-key';
 };
 
+// Log which storage mode we're using so you can verify Firebase connectivity
+const DEMO_MODE = isDemoMode();
+if (DEMO_MODE) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[InnerPeace] Firebase is not fully configured (demo mode ON). ' +
+      'Mood, journal, and chat data are NOT stored in Firestore.'
+  );
+} else {
+  // eslint-disable-next-line no-console
+  console.log(
+    '[InnerPeace] Connected to Firebase Firestore project:',
+    import.meta.env.VITE_FIREBASE_PROJECT_ID || '(projectId not set)'
+  );
+}
+
+// Utility to strip undefined values before sending data to Firestore
+const removeUndefined = <T extends Record<string, any>>(obj: T): T => {
+  const cleaned: Record<string, any> = {};
+  Object.entries(obj).forEach(([key, value]) => {
+    if (value === undefined) return;
+    if (
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      !(value instanceof Date) &&
+      !(value instanceof Timestamp)
+    ) {
+      cleaned[key] = removeUndefined(value);
+    } else {
+      cleaned[key] = value;
+    }
+  });
+  return cleaned as T;
+};
+
+// Timeout wrapper to prevent hanging Firestore requests
+async function withTimeout<T>(promise: Promise<T>, ms: number, context: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      console.error(`[InnerPeace] Firestore operation timed out after ${ms}ms: ${context}`);
+      reject(new Error('timeout'));
+    }, ms);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 // Mood Entries
 export const saveMoodEntry = async (entry: Omit<MoodEntry, 'id'>): Promise<string> => {
   if (isDemoMode()) {
     const id = `mood-${Date.now()}`;
     localMoodEntries.push({ ...entry, id });
+    console.log('[InnerPeace] Saved mood entry to local storage (demo mode)');
     return id;
   }
   
   try {
-    const docRef = await addDoc(collection(db, 'moodEntries'), {
+    const payload = removeUndefined({
       ...entry,
       timestamp: Timestamp.fromDate(entry.timestamp)
     });
+    console.log('[InnerPeace] Saving mood entry to Firestore...', { userId: entry.userId, mood: entry.mood });
+    const docRef = await withTimeout(
+      addDoc(collection(db, 'moodEntries'), payload),
+      8000,
+      'addDoc(moodEntries)'
+    );
+    console.log('[InnerPeace] ✓ Mood entry saved successfully:', docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error('Error saving mood entry:', error);
+    console.error('[InnerPeace] Error saving mood entry to Firestore:', error);
+    console.log('[InnerPeace] Falling back to local storage');
     const id = `mood-${Date.now()}`;
     localMoodEntries.push({ ...entry, id });
     return id;
@@ -47,13 +180,16 @@ export const saveMoodEntry = async (entry: Omit<MoodEntry, 'id'>): Promise<strin
 
 export const getMoodEntries = async (userId: string, limitCount: number = 30): Promise<MoodEntry[]> => {
   if (isDemoMode()) {
-    return localMoodEntries
+    const filtered = localMoodEntries
       .filter(e => e.userId === userId)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, limitCount);
+    console.log('[InnerPeace] Retrieved', filtered.length, 'mood entries from local storage (demo mode)');
+    return filtered;
   }
   
   try {
+    console.log('[InnerPeace] Fetching mood entries from Firestore for user:', userId);
     const q = query(
       collection(db, 'moodEntries'),
       where('userId', '==', userId),
@@ -61,14 +197,17 @@ export const getMoodEntries = async (userId: string, limitCount: number = 30): P
       limit(limitCount)
     );
     
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
+    const snapshot = await withTimeout(getDocs(q), 8000, 'getDocs(moodEntries)');
+    const entries = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
       timestamp: doc.data().timestamp.toDate()
     })) as MoodEntry[];
+    console.log('[InnerPeace] ✓ Retrieved', entries.length, 'mood entries from Firestore');
+    return entries;
   } catch (error) {
-    console.error('Error getting mood entries:', error);
+    console.error('[InnerPeace] Error getting mood entries from Firestore:', error);
+    console.log('[InnerPeace] Falling back to local storage');
     return localMoodEntries
       .filter(e => e.userId === userId)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
@@ -85,10 +224,15 @@ export const saveJournalEntry = async (entry: Omit<JournalEntry, 'id'>): Promise
   }
   
   try {
-    const docRef = await addDoc(collection(db, 'journalEntries'), {
+    const payload = removeUndefined({
       ...entry,
       timestamp: Timestamp.fromDate(entry.timestamp)
     });
+    const docRef = await withTimeout(
+      addDoc(collection(db, 'journalEntries'), payload),
+      8000,
+      'addDoc(journalEntries)'
+    );
     return docRef.id;
   } catch (error) {
     console.error('Error saving journal entry:', error);
@@ -114,7 +258,7 @@ export const getJournalEntries = async (userId: string, limitCount: number = 50)
       limit(limitCount)
     );
     
-    const snapshot = await getDocs(q);
+    const snapshot = await withTimeout(getDocs(q), 8000, 'getDocs(journalEntries)');
     return snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -139,7 +283,8 @@ export const updateJournalEntry = async (id: string, updates: Partial<JournalEnt
   }
   
   try {
-    await updateDoc(doc(db, 'journalEntries', id), updates);
+    const payload = removeUndefined(updates as Record<string, any>);
+    await withTimeout(updateDoc(doc(db, 'journalEntries', id), payload), 8000, 'updateDoc(journalEntries)');
   } catch (error) {
     console.error('Error updating journal entry:', error);
     const index = localJournalEntries.findIndex(e => e.id === id);
@@ -156,7 +301,7 @@ export const deleteJournalEntry = async (id: string): Promise<void> => {
   }
   
   try {
-    await deleteDoc(doc(db, 'journalEntries', id));
+    await withTimeout(deleteDoc(doc(db, 'journalEntries', id)), 8000, 'deleteDoc(journalEntries)');
   } catch (error) {
     console.error('Error deleting journal entry:', error);
     localJournalEntries = localJournalEntries.filter(e => e.id !== id);
@@ -172,15 +317,22 @@ export const saveChatSession = async (session: Omit<ChatSession, 'id'>): Promise
   }
   
   try {
-    const docRef = await addDoc(collection(db, 'chatSessions'), {
+    const payload = removeUndefined({
       ...session,
       startedAt: Timestamp.fromDate(session.startedAt),
       lastMessageAt: Timestamp.fromDate(session.lastMessageAt),
-      messages: session.messages.map(m => ({
-        ...m,
-        timestamp: Timestamp.fromDate(m.timestamp)
-      }))
+      messages: session.messages.map(m =>
+        removeUndefined({
+          ...m,
+          timestamp: Timestamp.fromDate(m.timestamp)
+        })
+      )
     });
+    const docRef = await withTimeout(
+      addDoc(collection(db, 'chatSessions'), payload),
+      8000,
+      'addDoc(chatSessions)'
+    );
     return docRef.id;
   } catch (error) {
     console.error('Error saving chat session:', error);
@@ -201,13 +353,16 @@ export const updateChatSession = async (id: string, messages: Message[]): Promis
   }
   
   try {
-    await updateDoc(doc(db, 'chatSessions', id), {
-      messages: messages.map(m => ({
-        ...m,
-        timestamp: Timestamp.fromDate(m.timestamp)
-      })),
+    const payload = {
+      messages: messages.map(m =>
+        removeUndefined({
+          ...m,
+          timestamp: Timestamp.fromDate(m.timestamp)
+        })
+      ),
       lastMessageAt: Timestamp.now()
-    });
+    };
+    await withTimeout(updateDoc(doc(db, 'chatSessions', id), payload), 8000, 'updateDoc(chatSessions)');
   } catch (error) {
     console.error('Error updating chat session:', error);
     const index = localChatSessions.findIndex(s => s.id === id);
@@ -233,7 +388,7 @@ export const getChatSessions = async (userId: string): Promise<ChatSession[]> =>
       limit(20)
     );
     
-    const snapshot = await getDocs(q);
+    const snapshot = await withTimeout(getDocs(q), 8000, 'getDocs(chatSessions)');
     return snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),

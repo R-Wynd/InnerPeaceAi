@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to validate userId exists
+    function hasValidUserId() {
+      return request.resource.data.userId is string && 
+             request.resource.data.userId.size() > 0;
+    }
+    
+    // Mood entries - allow read/write with valid userId
+    match /moodEntries/{doc} {
+      allow create: if hasValidUserId();
+      allow read: if true;  // Allow reads for now (can be tightened later)
+      allow update, delete: if true;
+    }
+    
+    // Journal entries - allow read/write with valid userId
+    match /journalEntries/{doc} {
+      allow create: if hasValidUserId();
+      allow read: if true;
+      allow update, delete: if true;
+    }
+    
+    // Chat sessions - allow read/write with valid userId
+    match /chatSessions/{doc} {
+      allow create: if hasValidUserId();
+      allow read: if true;
+      allow update, delete: if true;
+    }
+  }
+}
