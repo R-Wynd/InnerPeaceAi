@@ -47,10 +47,10 @@ A comprehensive mental health companion app with AI-powered support, mood tracki
 
 ```bash
 # Clone the repository
-git clone https://github.com/R-Wynd/InnerPeaceAi.git
+git clone https://github.com/YOUR_USERNAME/InnerPeaceAi.git
 
 # Navigate to project
-cd InnerPeaceAi/
+cd InnerPeaceAi/inner-peace-app
 
 # Install dependencies
 npm install
@@ -61,7 +61,7 @@ npm run dev
 
 ### Environment Variables
 
-Create a `.env` file in the `InnerPeaceAi` directory:
+Create a `.env` file in the `inner-peace-app` directory:
 
 ```env
 # Gemini AI (https://aistudio.google.com/app/apikey)
@@ -84,7 +84,7 @@ VITE_FIREBASE_APP_ID=your_app_id
 ## Project Structure
 
 ```
-InnerPeaceAi/
+inner-peace-app/
 ├── src/
 │   ├── components/      # UI components
 │   │   ├── Chatbot.tsx
