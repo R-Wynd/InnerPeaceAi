@@ -22,28 +22,16 @@ export const searchNearbyTherapists = async (
   lng: number,
   radius: number = 10000 // 10km default
 ): Promise<Therapist[]> => {
-  // If no API key, return mock data
-  if (!GOOGLE_MAPS_API_KEY) {
-    return getMockTherapists(lat, lng);
-  }
+  // NOTE:
+  // The original implementation attempted to call a backend proxy at `/api/places/nearby`.
+  // In the current setup there is no such backend route, so the browser receives HTML
+  // (the index.html file) instead of JSON, causing the `Unexpected token '<'` error.
+  //
+  // For this demo app we always use high‑quality mock therapist data on the client side,
+  // which avoids backend requirements and API key exposure. In production you can
+  // replace this with a real Places API call from a secure backend.
 
-  try {
-    // Note: In production, this should go through your backend to protect the API key
-    // Using Places API via server proxy
-    const response = await fetch(
-      `/api/places/nearby?lat=${lat}&lng=${lng}&radius=${radius}&type=doctor&keyword=therapist`
-    );
-    
-    if (!response.ok) {
-      throw new Error('Places API request failed');
-    }
-    
-    const data = await response.json();
-    return formatPlacesResults(data.results, lat, lng);
-  } catch (error) {
-    console.error('Error fetching nearby therapists:', error);
-    return getMockTherapists(lat, lng);
-  }
+  return getMockTherapists(lat, lng);
 };
 
 export const calculateDistance = (

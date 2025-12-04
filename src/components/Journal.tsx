@@ -12,7 +12,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { saveJournalEntry, getJournalEntries, deleteJournalEntry } from '../services/firestoreService';
-import { analyzeSentiment } from '../services/geminiService';
+import { analyzeSentiment } from '../services/gptService';
 import { useUser } from '../context/UserContext';
 import type { JournalEntry } from '../types';
 import { format, formatDistanceToNow } from 'date-fns';

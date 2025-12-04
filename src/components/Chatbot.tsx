@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Bot, User, Sparkles, Brain, Heart, Loader2 } from 'lucide-react';
-import { sendChatMessage, generateCBTExercise, generateDBTSkill } from '../services/geminiService';
+import { sendChatMessage, generateCBTExercise, generateDBTSkill } from '../services/gptService';
 import type { Message } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import './Chatbot.css';

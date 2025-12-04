@@ -1,18 +1,7 @@
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-
-// Models to try in order (newest to oldest)
-const MODELS_TO_TRY = [
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro-latest', 
-  'gemini-1.5-pro',
-  'gemini-pro',
-  'gemini-1.0-pro',
-  'gemini-1.0-pro-latest'
-];
-
-// API versions to try
-const API_VERSIONS = ['v1beta', 'v1'];
+// Using Google Gemini API with Flash 2.0 model
+// Get your API key at: https://aistudio.google.com/app/apikey
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 const THERAPEUTIC_SYSTEM_PROMPT = `You are InnerPeace AI, a compassionate and empathetic mental health support assistant. Your role is to:
 
@@ -48,25 +37,8 @@ export const sendChatMessage = async (
   message: string,
   conversationHistory: { role: string; content: string }[]
 ): Promise<string> => {
-  if (!API_KEY) {
-    return getMockResponse(message);
-  }
-
   try {
-    const historyText = conversationHistory
-      .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-      .join('\n\n');
-
-    const prompt = `${THERAPEUTIC_SYSTEM_PROMPT}
-
-Conversation so far:
-${historyText}
-
-User: ${message}
-
-Assistant (InnerPeace AI):`;
-
-    const result = await callGeminiWithFallback(prompt);
+    const result = await callGeminiAPI(message, conversationHistory);
     if (!result) {
       return getMockResponse(message);
     }
@@ -82,10 +54,6 @@ export const analyzeSentiment = async (text: string): Promise<{
   label: string;
   insights: string[];
 }> => {
-  if (!API_KEY) {
-    return getMockSentimentAnalysis(text);
-  }
-
   try {
     const prompt = `Analyze the emotional content of this journal entry and provide a JSON response with:
 1. "score": a number from -1 (very negative) to 1 (very positive)
@@ -96,7 +64,7 @@ Journal entry: "${text}"
 
 Respond ONLY with valid JSON, no additional text.`;
 
-    const raw = await callGeminiWithFallback(prompt);
+    const raw = await callGeminiSimple(prompt);
     if (!raw) {
       return getMockSentimentAnalysis(text);
     }
@@ -109,12 +77,10 @@ Respond ONLY with valid JSON, no additional text.`;
 };
 
 export const generateCBTExercise = async (concern: string): Promise<string> => {
-  if (!API_KEY) {
-    return getMockCBTExercise(concern);
-  }
-
   try {
-    const prompt = `Based on the user's concern: "${concern}"
+    const prompt = `${THERAPEUTIC_SYSTEM_PROMPT}
+
+Based on the user's concern: "${concern}"
     
 Generate a personalized CBT (Cognitive Behavioral Therapy) exercise. Include:
 1. A brief explanation of why this exercise might help
@@ -124,7 +90,7 @@ Generate a personalized CBT (Cognitive Behavioral Therapy) exercise. Include:
 
 Keep the response warm, supportive, and actionable.`;
 
-    const result = await callGeminiWithFallback(prompt);
+    const result = await callGeminiSimple(prompt);
     if (!result) {
       return getMockCBTExercise(concern);
     }
@@ -136,12 +102,10 @@ Keep the response warm, supportive, and actionable.`;
 };
 
 export const generateDBTSkill = async (situation: string): Promise<string> => {
-  if (!API_KEY) {
-    return getMockDBTSkill(situation);
-  }
-
   try {
-    const prompt = `Based on the user's situation: "${situation}"
+    const prompt = `${THERAPEUTIC_SYSTEM_PROMPT}
+
+Based on the user's situation: "${situation}"
 
 Recommend and teach a DBT (Dialectical Behavior Therapy) skill that would be helpful. Include:
 1. The skill name and which DBT module it belongs to (Mindfulness, Distress Tolerance, Emotion Regulation, or Interpersonal Effectiveness)
@@ -151,7 +115,7 @@ Recommend and teach a DBT (Dialectical Behavior Therapy) skill that would be hel
 
 Keep the response compassionate and practical.`;
 
-    const result = await callGeminiWithFallback(prompt);
+    const result = await callGeminiSimple(prompt);
     if (!result) {
       return getMockDBTSkill(situation);
     }
@@ -162,29 +126,82 @@ Keep the response compassionate and practical.`;
   }
 };
 
-// Try multiple models and API versions until one works
-async function callGeminiWithFallback(prompt: string): Promise<string | null> {
-  if (!API_KEY) return null;
-
-  for (const apiVersion of API_VERSIONS) {
-    for (const model of MODELS_TO_TRY) {
-      const result = await tryGeminiCall(prompt, model, apiVersion);
-      if (result) {
-        console.log(`Gemini working with: ${apiVersion}/models/${model}`);
-        return result;
-      }
-    }
+// Gemini API call with conversation history (multi-turn)
+async function callGeminiAPI(
+  message: string,
+  conversationHistory: { role: string; content: string }[]
+): Promise<string | null> {
+  if (!GEMINI_API_KEY) {
+    console.log('No Gemini API key configured. Using mock responses.');
+    console.log('Get your API key at: https://aistudio.google.com/app/apikey');
+    return null;
   }
 
-  console.error('All Gemini models failed. Using mock response.');
-  return null;
+  try {
+    console.log('Calling Gemini 2.0 Flash API...');
+
+    // Build contents array with system instruction and conversation history
+    const contents = [
+      // System instruction as first user message
+      {
+        role: 'user',
+        parts: [{ text: `Instructions for you: ${THERAPEUTIC_SYSTEM_PROMPT}\n\nNow respond to the user's messages.` }]
+      },
+      {
+        role: 'model',
+        parts: [{ text: 'I understand. I am InnerPeace AI, ready to provide compassionate mental health support using CBT and DBT techniques. How can I help you today?' }]
+      },
+      // Add conversation history
+      ...conversationHistory.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+      })),
+      // Add current message
+      {
+        role: 'user',
+        parts: [{ text: message }]
+      }
+    ];
+
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Gemini API error response:', response.status, errorData);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('Gemini 2.0 Flash API success!');
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    return text || null;
+  } catch (error) {
+    console.error('Gemini API request failed:', error);
+    return null;
+  }
 }
 
-async function tryGeminiCall(prompt: string, model: string, apiVersion: string): Promise<string | null> {
+// Simple Gemini API call for single prompts
+async function callGeminiSimple(prompt: string): Promise<string | null> {
+  if (!GEMINI_API_KEY) {
+    return null;
+  }
+
   try {
-    const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${API_KEY}`;
-    
-    const response = await fetch(url, {
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -192,29 +209,22 @@ async function tryGeminiCall(prompt: string, model: string, apiVersion: string):
       body: JSON.stringify({
         contents: [
           {
-            parts: [{ text: prompt }],
-          },
+            parts: [{ text: prompt }]
+          }
         ],
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 1024,
-        },
-      }),
+        }
+      })
     });
 
     if (!response.ok) {
-      // Don't log every 404, just silently try next model
       return null;
     }
 
     const data = await response.json();
-
-    const text =
-      data.candidates?.[0]?.content?.parts
-        ?.map((p: { text?: string }) => p.text || '')
-        .join(' ')
-        .trim() || '';
-
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     return text || null;
   } catch {
     return null;
