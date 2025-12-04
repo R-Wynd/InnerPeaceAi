@@ -1,37 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Smile, 
-  Meh, 
-  Frown, 
-  CloudRain, 
-  Sun, 
-  TrendingUp, 
-  TrendingDown, 
-  Minus,
-  Calendar,
-  Check,
-  Sparkles
-} from 'lucide-react';
-import { XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
-import { saveMoodEntry, getMoodEntries, getMoodPatterns } from '../services/firestoreService';
 import { useUser } from '../context/UserContext';
+import { saveMoodEntry, getMoodEntries, getMoodPatterns } from '../services/firestoreService';
 import type { MoodEntry } from '../types';
-import { format, subDays, startOfDay, isToday } from 'date-fns';
 import './MoodTracker.css';
 
 const MOODS = [
-  { value: 1, label: 'Terrible', icon: CloudRain, color: '#ef4444', gradient: 'linear-gradient(135deg, #dc2626, #ef4444)' },
-  { value: 2, label: 'Bad', icon: Frown, color: '#f97316', gradient: 'linear-gradient(135deg, #ea580c, #f97316)' },
-  { value: 3, label: 'Okay', icon: Meh, color: '#eab308', gradient: 'linear-gradient(135deg, #ca8a04, #eab308)' },
-  { value: 4, label: 'Good', icon: Smile, color: '#22c55e', gradient: 'linear-gradient(135deg, #16a34a, #22c55e)' },
-  { value: 5, label: 'Great', icon: Sun, color: '#06b6d4', gradient: 'linear-gradient(135deg, #0891b2, #06b6d4)' }
+  { value: 1, label: 'Awful', emoji: '😢', color: '#ef4444', bgColor: '#fef2f2' },
+  { value: 2, label: 'Bad', emoji: '😔', color: '#f97316', bgColor: '#fff7ed' },
+  { value: 3, label: 'Okay', emoji: '😐', color: '#eab308', bgColor: '#fefce8' },
+  { value: 4, label: 'Good', emoji: '😊', color: '#22c55e', bgColor: '#f0fdf4' },
+  { value: 5, label: 'Great', emoji: '🤗', color: '#8b5cf6', bgColor: '#f5f3ff' }
 ];
 
 const EMOTIONS = [
-  'Happy', 'Calm', 'Grateful', 'Hopeful', 'Energetic',
-  'Anxious', 'Sad', 'Stressed', 'Angry', 'Tired',
-  'Confused', 'Lonely', 'Overwhelmed', 'Peaceful', 'Motivated'
+  { name: 'Anxious', emoji: '😰' },
+  { name: 'Stressed', emoji: '😤' },
+  { name: 'Sad', emoji: '😢' },
+  { name: 'Tired', emoji: '😴' },
+  { name: 'Calm', emoji: '😌' },
+  { name: 'Happy', emoji: '😄' },
+  { name: 'Grateful', emoji: '🙏' },
+  { name: 'Excited', emoji: '🎉' },
+  { name: 'Lonely', emoji: '🥺' },
+  { name: 'Hopeful', emoji: '✨' },
+  { name: 'Motivated', emoji: '💪' },
+  { name: 'Peaceful', emoji: '🕊️' }
 ];
 
 const MoodTracker: React.FC = () => {
@@ -39,308 +33,305 @@ const MoodTracker: React.FC = () => {
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
   const [selectedEmotions, setSelectedEmotions] = useState<string[]>([]);
   const [note, setNote] = useState('');
-  const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
-  const [patterns, setPatterns] = useState<{
-    averageMood: number;
-    moodTrend: 'improving' | 'stable' | 'declining';
-    commonEmotions: string[];
-    entriesCount: number;
-  } | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [step, setStep] = useState(1);
+  const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [, setTodayLogged] = useState(false);
+  const [entries, setEntries] = useState<MoodEntry[]>([]);
+  const [patterns, setPatterns] = useState<{ averageMood: number; moodTrend: string; entriesCount: number } | null>(null);
 
   useEffect(() => {
-    if (user) {
-      loadMoodData();
-    }
+    loadEntries();
   }, [user]);
 
-  const loadMoodData = async () => {
-    if (!user) return;
-    
-    const entries = await getMoodEntries(user.id, 30);
-    setMoodEntries(entries);
-    
-    const todayEntry = entries.find(e => isToday(new Date(e.timestamp)));
-    setTodayLogged(!!todayEntry);
-    
-    const patternData = await getMoodPatterns(user.id, 30);
-    setPatterns(patternData);
+  const loadEntries = async () => {
+    const userId = user?.id || 'anonymous';
+    const [entriesData, patternsData] = await Promise.all([
+      getMoodEntries(userId, 7),
+      getMoodPatterns(userId, 7)
+    ]);
+    setEntries(entriesData);
+    setPatterns(patternsData);
   };
 
-  const handleEmotionToggle = (emotion: string) => {
-    setSelectedEmotions(prev => 
-      prev.includes(emotion) 
+  const toggleEmotion = (emotion: string) => {
+    setSelectedEmotions(prev =>
+      prev.includes(emotion)
         ? prev.filter(e => e !== emotion)
         : [...prev, emotion]
     );
   };
 
-  const handleSubmit = async () => {
-    if (!selectedMood || !user || isSubmitting) return;
-    
-    setIsSubmitting(true);
-    
+  const handleSaveMood = async () => {
+    if (selectedMood === null) return;
+
+    setIsSaving(true);
+    const selectedMoodData = MOODS.find(m => m.value === selectedMood)!;
+
     try {
-      const entry: Omit<MoodEntry, 'id'> = {
-        userId: user.id,
+      await saveMoodEntry({
+        userId: user?.id || 'anonymous',
         mood: selectedMood,
-        moodLabel: MOODS.find(m => m.value === selectedMood)?.label || '',
+        moodLabel: selectedMoodData.label,
         emotions: selectedEmotions,
         note: note.trim() || undefined,
         timestamp: new Date()
-      };
-      
-      await saveMoodEntry(entry);
-      
+      });
+
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
-        setSelectedMood(null);
-        setSelectedEmotions([]);
-        setNote('');
-        loadMoodData();
+        resetForm();
+        loadEntries();
       }, 2000);
     } catch (error) {
-      console.error('Error submitting mood entry:', error);
-      // Optional: surface a gentle UI message here if desired
+      console.error('Error saving mood:', error);
     } finally {
-      setIsSubmitting(false);
+      setIsSaving(false);
     }
   };
 
-  const getChartData = () => {
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const date = subDays(new Date(), 6 - i);
-      const dayStart = startOfDay(date);
-      const entry = moodEntries.find(e => 
-        startOfDay(new Date(e.timestamp)).getTime() === dayStart.getTime()
-      );
-      return {
-        date: format(date, 'EEE'),
-        fullDate: format(date, 'MMM d'),
-        mood: entry?.mood || null
-      };
-    });
-    return last7Days;
+  const resetForm = () => {
+    setSelectedMood(null);
+    setSelectedEmotions([]);
+    setNote('');
+    setStep(1);
   };
 
-  const getTrendIcon = () => {
-    if (!patterns) return <Minus size={18} />;
-    switch (patterns.moodTrend) {
-      case 'improving': return <TrendingUp size={18} />;
-      case 'declining': return <TrendingDown size={18} />;
-      default: return <Minus size={18} />;
-    }
+  const getTrendEmoji = () => {
+    if (!patterns) return '📊';
+    if (patterns.moodTrend === 'improving') return '📈';
+    if (patterns.moodTrend === 'declining') return '📉';
+    return '➡️';
   };
 
-  const getTrendColor = () => {
-    if (!patterns) return '#9ca3af';
-    switch (patterns.moodTrend) {
-      case 'improving': return '#22c55e';
-      case 'declining': return '#ef4444';
-      default: return '#eab308';
-    }
-  };
+  const getMoodColor = (mood: number) => MOODS[mood - 1]?.color || '#8b5cf6';
 
   return (
-    <div className="mood-tracker-container">
+    <div className="mood-tracker">
+      {/* Header */}
       <div className="mood-header">
-        <div className="header-content">
-          <h2>How are you feeling?</h2>
-          <p>Track your emotional journey</p>
+        <div>
+          <h1>Mood Check-In</h1>
+          <p>How are you feeling right now? 🌸</p>
         </div>
-        <div className="streak-badge">
-          <Calendar size={16} />
-          <span>{patterns?.entriesCount || 0} entries</span>
-        </div>
+        {patterns && patterns.entriesCount > 0 && (
+          <div className="streak-badge">
+            <span>{getTrendEmoji()}</span>
+            <span>{patterns.entriesCount}</span>
+          </div>
+        )}
       </div>
 
-      <AnimatePresence mode="wait">
-        {showSuccess ? (
+      {/* Success Animation */}
+      <AnimatePresence>
+        {showSuccess && (
           <motion.div
-            key="success"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
-            className="success-message"
+            className="success-overlay"
           >
-            <div className="success-icon">
-              <Check size={40} />
+            <div className="success-card">
+              <span className="success-emoji">✨</span>
+              <h2>Saved!</h2>
+              <p>Great job checking in with yourself</p>
             </div>
-            <h3>Mood Logged!</h3>
-            <p>Great job taking care of yourself</p>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="form"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            {/* Mood Selection */}
-            <div className="mood-selection">
-              <h3>Select your mood</h3>
-              <div className="mood-buttons">
-                {MOODS.map((mood, index) => {
-                  const Icon = mood.icon;
-                  return (
-                    <motion.button
-                      key={mood.value}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      whileHover={{ scale: 1.1, y: -5 }}
-                      whileTap={{ scale: 0.95 }}
-                      className={`mood-btn ${selectedMood === mood.value ? 'selected' : ''}`}
-                      style={{ 
-                        '--mood-color': mood.color,
-                        '--mood-gradient': mood.gradient
-                      } as React.CSSProperties}
-                      onClick={() => setSelectedMood(mood.value)}
-                    >
-                      <Icon size={32} />
-                      <span>{mood.label}</span>
-                    </motion.button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Emotion Tags */}
-            <div className="emotions-section">
-              <h3>What emotions are you experiencing?</h3>
-              <div className="emotion-tags">
-                {EMOTIONS.map((emotion) => (
-                  <motion.button
-                    key={emotion}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={`emotion-tag ${selectedEmotions.includes(emotion) ? 'selected' : ''}`}
-                    onClick={() => handleEmotionToggle(emotion)}
-                  >
-                    {emotion}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-
-            {/* Note */}
-            <div className="note-section">
-              <h3>Add a note (optional)</h3>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="What's on your mind?"
-                rows={3}
-              />
-            </div>
-
-            {/* Submit Button */}
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="submit-btn"
-              onClick={handleSubmit}
-              disabled={!selectedMood || isSubmitting}
-            >
-              <Sparkles size={20} />
-              <span>{isSubmitting ? 'Saving...' : 'Log Mood'}</span>
-            </motion.button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Mood Chart */}
-      <div className="mood-chart-section">
-        <div className="chart-header">
-          <h3>Your Week</h3>
-          {patterns && (
-            <div className="trend-indicator" style={{ color: getTrendColor() }}>
-              {getTrendIcon()}
-              <span>{patterns.moodTrend}</span>
+      {/* Main Content */}
+      <div className="mood-content">
+        {/* Step 1: Mood Selection */}
+        {step === 1 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mood-step"
+          >
+            <h2 className="step-title">How are you feeling? 💭</h2>
+            <div className="mood-options">
+              {MOODS.map((mood) => (
+                <motion.button
+                  key={mood.value}
+                  onClick={() => setSelectedMood(mood.value)}
+                  className={`mood-option ${selectedMood === mood.value ? 'selected' : ''}`}
+                  style={{
+                    backgroundColor: selectedMood === mood.value ? mood.bgColor : undefined,
+                    borderColor: selectedMood === mood.value ? mood.color : undefined
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <span className="mood-emoji">{mood.emoji}</span>
+                  <span className="mood-label">{mood.label}</span>
+                </motion.button>
+              ))}
             </div>
-          )}
-        </div>
-        <div className="chart-container">
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={getChartData()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="moodGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <XAxis 
-                dataKey="date" 
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }}
-              />
-              <YAxis 
-                domain={[1, 5]} 
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }}
-                ticks={[1, 2, 3, 4, 5]}
-              />
-              <Tooltip 
-                contentStyle={{
-                  background: 'rgba(30, 30, 50, 0.95)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '12px',
-                  color: 'white'
-                }}
-                formatter={(value: any) => {
-                  if (value === null) return ['No entry', 'Mood'];
-                  const mood = MOODS.find(m => m.value === value);
-                  return [mood?.label || value, 'Mood'];
-                }}
-                labelFormatter={(label: any, payload: any) => {
-                  if (payload?.[0]?.payload?.fullDate) {
-                    return payload[0].payload.fullDate;
-                  }
-                  return label;
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="mood"
-                stroke="#8b5cf6"
-                strokeWidth={3}
-                fill="url(#moodGradient)"
-                dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 5 }}
-                connectNulls={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+            {selectedMood && (
+              <motion.button
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="continue-btn"
+                onClick={() => setStep(2)}
+              >
+                Continue →
+              </motion.button>
+            )}
+          </motion.div>
+        )}
+
+        {/* Step 2: Emotions */}
+        {step === 2 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mood-step"
+          >
+            <h2 className="step-title">What emotions? 💜</h2>
+            <p className="step-subtitle">Select all that apply</p>
+            <div className="emotions-grid">
+              {EMOTIONS.map((emotion) => (
+                <motion.button
+                  key={emotion.name}
+                  onClick={() => toggleEmotion(emotion.name)}
+                  className={`emotion-chip ${selectedEmotions.includes(emotion.name) ? 'selected' : ''}`}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <span>{emotion.emoji}</span>
+                  <span>{emotion.name}</span>
+                </motion.button>
+              ))}
+            </div>
+            <div className="step-actions">
+              <button className="back-btn" onClick={() => setStep(1)}>
+                ← Back
+              </button>
+              <button className="continue-btn" onClick={() => setStep(3)}>
+                Continue →
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Step 3: Note */}
+        {step === 3 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mood-step"
+          >
+            <h2 className="step-title">Any notes? 📝</h2>
+            <p className="step-subtitle">Optional - share what's on your mind</p>
+            <textarea
+              className="note-input"
+              placeholder="What's happening in your life right now..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={4}
+            />
+            <div className="step-actions">
+              <button className="back-btn" onClick={() => setStep(2)}>
+                ← Back
+              </button>
+              <button 
+                className="save-btn"
+                onClick={handleSaveMood}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Saving...' : 'Save Check-In ✨'}
+              </button>
+            </div>
+          </motion.div>
+        )}
       </div>
 
-      {/* Patterns Insights */}
-      {patterns && patterns.commonEmotions.length > 0 && (
-        <div className="patterns-section">
-          <h3>Your Patterns</h3>
-          <div className="pattern-cards">
-            <div className="pattern-card">
-              <span className="pattern-label">Average Mood</span>
-              <span className="pattern-value">{patterns.averageMood.toFixed(1)}/5</span>
-            </div>
-            <div className="pattern-card">
-              <span className="pattern-label">Common Emotions</span>
-              <div className="common-emotions">
-                {patterns.commonEmotions.slice(0, 3).map(e => (
-                  <span key={e} className="emotion-chip">{e}</span>
-                ))}
+      {/* Recent Entries */}
+      {entries.length > 0 && step === 1 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="recent-section"
+        >
+          <h3>Recent Check-Ins 📅</h3>
+          <div className="entries-list">
+            {entries.slice(0, 5).map((entry) => (
+              <div key={entry.id} className="entry-card">
+                <div className="entry-mood">
+                  <span className="entry-emoji">
+                    {MOODS[entry.mood - 1]?.emoji}
+                  </span>
+                </div>
+                <div className="entry-details">
+                  <div className="entry-header">
+                    <span 
+                      className="entry-label"
+                      style={{ color: getMoodColor(entry.mood) }}
+                    >
+                      {entry.moodLabel}
+                    </span>
+                    <span className="entry-date">
+                      {new Date(entry.timestamp).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                  {entry.emotions.length > 0 && (
+                    <div className="entry-emotions">
+                      {entry.emotions.slice(0, 3).map(e => {
+                        const emotionData = EMOTIONS.find(em => em.name === e);
+                        return (
+                          <span key={e} className="emotion-tag">
+                            {emotionData?.emoji} {e}
+                          </span>
+                        );
+                      })}
+                      {entry.emotions.length > 3 && (
+                        <span className="emotion-more">+{entry.emotions.length - 3}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Weekly Stats */}
+      {patterns && patterns.entriesCount > 0 && step === 1 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="stats-card"
+        >
+          <h3>This Week 📊</h3>
+          <div className="stats-grid">
+            <div className="stat-item">
+              <span className="stat-value">{patterns.entriesCount}</span>
+              <span className="stat-label">Check-ins</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">
+                {MOODS[Math.round(patterns.averageMood) - 1]?.emoji || '😊'}
+              </span>
+              <span className="stat-label">Avg Mood</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">{getTrendEmoji()}</span>
+              <span className="stat-label">
+                {patterns.moodTrend === 'improving' ? 'Improving' : 
+                 patterns.moodTrend === 'declining' ? 'Declining' : 'Stable'}
+              </span>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
     </div>
   );
 };
 
 export default MoodTracker;
-

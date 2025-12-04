@@ -31,8 +31,12 @@ export interface JournalEntry {
   title: string;
   content: string;
   timestamp: Date;
+  prompt?: string;
   mood?: number;
   emotions?: string[];
+  sentimentScore?: number;
+  sentimentLabel?: string;
+  updatedAt?: Date;
   sentimentAnalysis?: {
     score: number;
     label: string;
@@ -44,11 +48,13 @@ export interface JournalEntry {
 export interface Therapist {
   id: string;
   name: string;
-  specialty: string;
+  specialty?: string;
+  specialties: string[];
   address: string;
-  phone: string;
-  rating: number;
-  distance?: string;
+  phone?: string;
+  website?: string;
+  rating?: number;
+  distance?: number;
   location: {
     lat: number;
     lng: number;
@@ -82,4 +88,3 @@ export interface ChatSession {
   startedAt: Date;
   lastMessageAt: Date;
 }
-

@@ -1,334 +1,358 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  BookOpen, 
-  Plus, 
-  Sparkles, 
-  Clock, 
-  ChevronRight,
-  Trash2,
-  X,
-  Lightbulb,
-  ArrowLeft
-} from 'lucide-react';
-import { saveJournalEntry, getJournalEntries, deleteJournalEntry } from '../services/firestoreService';
-import { analyzeSentiment } from '../services/gptService';
 import { useUser } from '../context/UserContext';
+import { 
+  saveJournalEntry, 
+  getJournalEntries, 
+  updateJournalEntry, 
+  deleteJournalEntry 
+} from '../services/firestoreService';
+import { analyzeSentiment } from '../services/geminiService';
 import type { JournalEntry } from '../types';
-import { format, formatDistanceToNow } from 'date-fns';
 import './Journal.css';
 
 const PROMPTS = [
-  "What made you smile today?",
-  "What's something you're grateful for right now?",
-  "How are you really feeling in this moment?",
-  "What's been on your mind lately?",
-  "Describe a recent challenge and how you handled it.",
-  "What would you tell your younger self today?",
-  "What's one small win you've had recently?",
-  "What emotions have you been avoiding?",
-  "What does self-care look like for you today?",
-  "Write about something that's been weighing on you."
+  { emoji: '🌟', text: 'What are you grateful for today?' },
+  { emoji: '💭', text: 'What\'s on your mind right now?' },
+  { emoji: '🎯', text: 'What\'s one small win you had today?' },
+  { emoji: '🌱', text: 'How are you taking care of yourself?' },
+  { emoji: '💪', text: 'What challenge are you facing?' },
+  { emoji: '✨', text: 'What made you smile recently?' }
 ];
 
 const Journal: React.FC = () => {
   const { user } = useUser();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isWriting, setIsWriting] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [currentPrompt, setCurrentPrompt] = useState('');
+  const [selectedPrompt, setSelectedPrompt] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'write' | 'entries'>('entries');
 
   useEffect(() => {
-    if (user) {
-      loadEntries();
-    }
-    generateNewPrompt();
+    loadEntries();
   }, [user]);
 
   const loadEntries = async () => {
-    if (!user) return;
-    const data = await getJournalEntries(user.id, 50);
+    const userId = user?.id || 'anonymous';
+    const data = await getJournalEntries(userId, 50);
     setEntries(data);
   };
 
-  const generateNewPrompt = () => {
-    const randomPrompt = PROMPTS[Math.floor(Math.random() * PROMPTS.length)];
-    setCurrentPrompt(randomPrompt);
-  };
-
-  const handleStartWriting = (withPrompt: boolean = false) => {
-    setIsWriting(true);
-    setTitle(withPrompt ? currentPrompt : '');
-    setContent('');
-    generateNewPrompt();
-  };
-
   const handleSave = async () => {
-    if (!content.trim() || !user) return;
-    
-    setIsAnalyzing(true);
-    
-    // Analyze sentiment
-    const sentiment = await analyzeSentiment(content);
-    
-    const entry: Omit<JournalEntry, 'id'> = {
-      userId: user.id,
-      title: title.trim() || format(new Date(), 'MMMM d, yyyy'),
-      content: content.trim(),
-      timestamp: new Date(),
-      sentimentAnalysis: sentiment
-    };
-    
-    await saveJournalEntry(entry);
-    
-    setIsAnalyzing(false);
-    setIsWriting(false);
-    setTitle('');
-    setContent('');
-    loadEntries();
+    if (!content.trim()) return;
+
+    setIsSaving(true);
+
+    try {
+      const sentiment = await analyzeSentiment(content);
+      const finalTitle = title.trim() || new Date().toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric'
+      });
+
+      if (editingEntry) {
+        await updateJournalEntry(editingEntry.id, {
+          title: finalTitle,
+          content: content.trim(),
+          sentimentScore: sentiment.score,
+          sentimentLabel: sentiment.label,
+          updatedAt: new Date()
+        });
+      } else {
+        await saveJournalEntry({
+          userId: user?.id || 'anonymous',
+          title: finalTitle,
+          content: content.trim(),
+          prompt: selectedPrompt || undefined,
+          sentimentScore: sentiment.score,
+          sentimentLabel: sentiment.label,
+          timestamp: new Date()
+        });
+      }
+
+      resetForm();
+      loadEntries();
+      setActiveTab('entries');
+    } catch (error) {
+      console.error('Error saving entry:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this entry?')) {
+    try {
       await deleteJournalEntry(id);
-      setSelectedEntry(null);
       loadEntries();
+      setDeleteConfirm(null);
+    } catch (error) {
+      console.error('Error deleting entry:', error);
     }
   };
 
-  const getSentimentColor = (label?: string) => {
-    switch (label) {
-      case 'Very Positive': return '#22c55e';
-      case 'Positive': return '#4ade80';
-      case 'Neutral': return '#eab308';
-      case 'Negative': return '#f97316';
-      case 'Very Negative': return '#ef4444';
-      default: return '#9ca3af';
-    }
+  const startEditing = (entry: JournalEntry) => {
+    setEditingEntry(entry);
+    setTitle(entry.title);
+    setContent(entry.content);
+    setSelectedPrompt(entry.prompt || null);
+    setActiveTab('write');
+    setIsWriting(true);
+  };
+
+  const resetForm = () => {
+    setTitle('');
+    setContent('');
+    setSelectedPrompt(null);
+    setEditingEntry(null);
+    setIsWriting(false);
+  };
+
+  const selectPrompt = (prompt: string) => {
+    setSelectedPrompt(prompt);
+    setIsWriting(true);
+    setActiveTab('write');
   };
 
   const getSentimentEmoji = (label?: string) => {
     switch (label) {
-      case 'Very Positive': return '😊';
-      case 'Positive': return '🙂';
-      case 'Neutral': return '😐';
-      case 'Negative': return '😔';
-      case 'Very Negative': return '😢';
+      case 'very_positive': return '🌟';
+      case 'positive': return '😊';
+      case 'neutral': return '😐';
+      case 'negative': return '😔';
+      case 'very_negative': return '😢';
       default: return '📝';
     }
   };
 
+  const formatDate = (date: Date) => {
+    const d = new Date(date);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (d.toDateString() === today.toDateString()) return 'Today';
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+
+    return d.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
   return (
     <div className="journal-container">
-      <AnimatePresence mode="wait">
-        {selectedEntry ? (
-          // Entry Detail View
-          <motion.div
-            key="detail"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            className="entry-detail"
-          >
-            <div className="detail-header">
-              <button className="back-btn" onClick={() => setSelectedEntry(null)}>
-                <ArrowLeft size={20} />
-                <span>Back</span>
-              </button>
-              <button 
-                className="delete-btn"
-                onClick={() => handleDelete(selectedEntry.id)}
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-            
-            <div className="detail-content">
-              <h2>{selectedEntry.title}</h2>
-              <div className="detail-meta">
-                <span className="detail-date">
-                  <Clock size={14} />
-                  {format(new Date(selectedEntry.timestamp), 'MMMM d, yyyy • h:mm a')}
-                </span>
-                {selectedEntry.sentimentAnalysis && (
-                  <span 
-                    className="sentiment-badge"
-                    style={{ background: `${getSentimentColor(selectedEntry.sentimentAnalysis.label)}20`, color: getSentimentColor(selectedEntry.sentimentAnalysis.label) }}
+      {/* Header */}
+      <div className="journal-header">
+        <div>
+          <h1>My Journal 📔</h1>
+          <p>A safe space for your thoughts</p>
+        </div>
+        <div className="entry-count">
+          <span>{entries.length}</span>
+          <span>entries</span>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="tab-nav">
+        <button 
+          className={`tab-btn ${activeTab === 'entries' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('entries'); resetForm(); }}
+        >
+          📚 Entries
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'write' ? 'active' : ''}`}
+          onClick={() => setActiveTab('write')}
+        >
+          ✏️ Write
+        </button>
+      </div>
+
+      {/* Write Tab */}
+      {activeTab === 'write' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="write-section"
+        >
+          {/* Prompts */}
+          {!isWriting && (
+            <div className="prompts-section">
+              <h3>Get inspired ✨</h3>
+              <div className="prompts-grid">
+                {PROMPTS.map((prompt, index) => (
+                  <motion.button
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="prompt-card"
+                    onClick={() => selectPrompt(prompt.text)}
                   >
-                    {getSentimentEmoji(selectedEntry.sentimentAnalysis.label)} {selectedEntry.sentimentAnalysis.label}
-                  </span>
-                )}
-              </div>
-              
-              <div className="detail-body">
-                {selectedEntry.content.split('\n').map((para, i) => (
-                  <p key={i}>{para}</p>
+                    <span className="prompt-emoji">{prompt.emoji}</span>
+                    <span className="prompt-text">{prompt.text}</span>
+                  </motion.button>
                 ))}
               </div>
-              
-              {selectedEntry.sentimentAnalysis?.insights && (
-                <div className="insights-section">
-                  <h4><Lightbulb size={18} /> AI Insights</h4>
-                  <ul>
-                    {selectedEntry.sentimentAnalysis.insights.map((insight, i) => (
-                      <li key={i}>{insight}</li>
-                    ))}
-                  </ul>
+              <button 
+                className="free-write-btn"
+                onClick={() => setIsWriting(true)}
+              >
+                Or start free writing →
+              </button>
+            </div>
+          )}
+
+          {/* Writing Area */}
+          {isWriting && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="writing-area"
+            >
+              {selectedPrompt && (
+                <div className="selected-prompt">
+                  <span>💭</span>
+                  <span>{selectedPrompt}</span>
+                  <button onClick={() => setSelectedPrompt(null)}>✕</button>
                 </div>
               )}
-            </div>
-          </motion.div>
-        ) : isWriting ? (
-          // Writing View
-          <motion.div
-            key="writing"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="writing-view"
-          >
-            <div className="writing-header">
-              <button className="close-btn" onClick={() => setIsWriting(false)}>
-                <X size={24} />
-              </button>
-              <button 
-                className="save-btn"
-                onClick={handleSave}
-                disabled={!content.trim() || isAnalyzing}
-              >
-                {isAnalyzing ? 'Analyzing...' : 'Save'}
-              </button>
-            </div>
-            
-            <div className="writing-content">
+
               <input
                 type="text"
                 className="title-input"
-                placeholder="Title (optional)"
+                placeholder="Entry title (optional)"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
+
               <textarea
                 className="content-input"
-                placeholder="Start writing your thoughts..."
+                placeholder="Start writing... let your thoughts flow freely 💜"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
+                rows={10}
                 autoFocus
               />
-            </div>
-            
-            {isAnalyzing && (
-              <div className="analyzing-overlay">
-                <Sparkles className="spinning" size={24} />
-                <p>Analyzing your entry...</p>
-              </div>
-            )}
-          </motion.div>
-        ) : (
-          // List View
-          <motion.div
-            key="list"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <div className="journal-header">
-              <div className="header-text">
-                <h2><BookOpen size={28} /> Journal</h2>
-                <p>Reflect, process, and grow</p>
-              </div>
-            </div>
 
-            {/* Writing Prompt */}
-            <motion.div 
-              className="prompt-card"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div className="prompt-header">
-                <Sparkles size={18} />
-                <span>Today's Prompt</span>
-              </div>
-              <p className="prompt-text">"{currentPrompt}"</p>
-              <div className="prompt-actions">
-                <button 
-                  className="prompt-btn primary"
-                  onClick={() => handleStartWriting(true)}
-                >
-                  Write About This
+              <div className="writing-actions">
+                <button className="cancel-btn" onClick={resetForm}>
+                  Cancel
                 </button>
                 <button 
-                  className="prompt-btn secondary"
-                  onClick={generateNewPrompt}
+                  className="save-btn"
+                  onClick={handleSave}
+                  disabled={!content.trim() || isSaving}
                 >
-                  New Prompt
+                  {isSaving ? 'Saving...' : editingEntry ? 'Update ✓' : 'Save Entry ✨'}
                 </button>
               </div>
             </motion.div>
+          )}
+        </motion.div>
+      )}
 
-            {/* New Entry Button */}
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="new-entry-btn"
-              onClick={() => handleStartWriting(false)}
-            >
-              <Plus size={22} />
-              <span>New Entry</span>
-            </motion.button>
-
-            {/* Entries List */}
+      {/* Entries Tab */}
+      {activeTab === 'entries' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="entries-section"
+        >
+          {entries.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-emoji">📔</span>
+              <h3>Your journal is empty</h3>
+              <p>Start writing to capture your thoughts</p>
+              <button 
+                className="start-writing-btn"
+                onClick={() => setActiveTab('write')}
+              >
+                Write First Entry ✨
+              </button>
+            </div>
+          ) : (
             <div className="entries-list">
-              <h3>Recent Entries</h3>
-              {entries.length === 0 ? (
-                <div className="empty-state">
-                  <BookOpen size={48} />
-                  <p>Your journal is empty</p>
-                  <span>Start writing to track your thoughts and emotions</span>
-                </div>
-              ) : (
-                entries.map((entry, index) => (
+              <AnimatePresence>
+                {entries.map((entry, index) => (
                   <motion.div
                     key={entry.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -100 }}
                     transition={{ delay: index * 0.05 }}
                     className="entry-card"
-                    onClick={() => setSelectedEntry(entry)}
                   >
-                    <div className="entry-left">
-                      <span 
-                        className="entry-emoji"
-                        style={{ background: `${getSentimentColor(entry.sentimentAnalysis?.label)}20` }}
-                      >
-                        {getSentimentEmoji(entry.sentimentAnalysis?.label)}
-                      </span>
-                    </div>
-                    <div className="entry-info">
-                      <h4>{entry.title}</h4>
-                      <p className="entry-preview">
-                        {entry.content.substring(0, 100)}
-                        {entry.content.length > 100 ? '...' : ''}
-                      </p>
-                      <span className="entry-time">
-                        <Clock size={12} />
-                        {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })}
-                      </span>
-                    </div>
-                    <ChevronRight size={20} className="entry-arrow" />
+                    {deleteConfirm === entry.id ? (
+                      <div className="delete-confirm">
+                        <p>Delete this entry?</p>
+                        <div className="confirm-actions">
+                          <button onClick={() => setDeleteConfirm(null)}>
+                            Cancel
+                          </button>
+                          <button 
+                            className="delete-btn"
+                            onClick={() => handleDelete(entry.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="entry-header">
+                          <span className="entry-sentiment">
+                            {getSentimentEmoji(entry.sentimentLabel)}
+                          </span>
+                          <div className="entry-meta">
+                            <h4>{entry.title}</h4>
+                            <span className="entry-date">
+                              {formatDate(entry.timestamp)}
+                            </span>
+                          </div>
+                          <div className="entry-actions">
+                            <button 
+                              className="edit-btn"
+                              onClick={() => startEditing(entry)}
+                              title="Edit"
+                            >
+                              ✏️
+                            </button>
+                            <button 
+                              className="delete-trigger"
+                              onClick={() => setDeleteConfirm(entry.id)}
+                              title="Delete"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                        {entry.prompt && (
+                          <p className="entry-prompt">💭 {entry.prompt}</p>
+                        )}
+                        <p className="entry-content">
+                          {entry.content.length > 200 
+                            ? entry.content.substring(0, 200) + '...' 
+                            : entry.content}
+                        </p>
+                      </>
+                    )}
                   </motion.div>
-                ))
-              )}
+                ))}
+              </AnimatePresence>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </motion.div>
+      )}
     </div>
   );
 };
 
 export default Journal;
-

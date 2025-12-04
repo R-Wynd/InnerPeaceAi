@@ -20,7 +20,7 @@ export const getCurrentLocation = (): Promise<GeolocationPosition> => {
 export const searchNearbyTherapists = async (
   lat: number,
   lng: number,
-  radius: number = 10000 // 10km default
+  _radius: number = 10000 // 10km default (prefixed with _ to indicate intentionally unused)
 ): Promise<Therapist[]> => {
   // NOTE:
   // The original implementation attempted to call a backend proxy at `/api/places/nearby`.
@@ -53,58 +53,23 @@ export const calculateDistance = (
 
 const toRad = (deg: number): number => deg * (Math.PI / 180);
 
-const formatDistance = (km: number): string => {
+export const formatDistance = (km: number): string => {
   if (km < 1) {
     return `${Math.round(km * 1000)}m`;
   }
-  return `${km.toFixed(1)}km`;
-};
-
-const formatPlacesResults = (results: any[], userLat: number, userLng: number): Therapist[] => {
-  return results.map((place: any, index: number) => {
-    const distance = calculateDistance(
-      userLat,
-      userLng,
-      place.geometry.location.lat,
-      place.geometry.location.lng
-    );
-    
-    return {
-      id: place.place_id || `place-${index}`,
-      name: place.name,
-      specialty: getSpecialty(place.types),
-      address: place.vicinity || place.formatted_address,
-      phone: place.formatted_phone_number || 'Call for appointment',
-      rating: place.rating || 4.0,
-      distance: formatDistance(distance),
-      location: {
-        lat: place.geometry.location.lat,
-        lng: place.geometry.location.lng
-      },
-      openNow: place.opening_hours?.open_now,
-      photoUrl: place.photos?.[0]?.photo_reference 
-        ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${place.photos[0].photo_reference}&key=${GOOGLE_MAPS_API_KEY}`
-        : undefined
-    };
-  });
-};
-
-const getSpecialty = (types: string[]): string => {
-  if (types?.includes('psychologist')) return 'Clinical Psychologist';
-  if (types?.includes('psychiatrist')) return 'Psychiatrist';
-  if (types?.includes('counselor')) return 'Licensed Counselor';
-  return 'Mental Health Professional';
+  return `${km.toFixed(1)} km`;
 };
 
 // Mock data for demo mode
 const getMockTherapists = (userLat: number, userLng: number): Therapist[] => {
-  const mockTherapists = [
+  const mockTherapists: Omit<Therapist, 'distance'>[] = [
     {
       id: '1',
       name: 'Dr. Sarah Mitchell',
-      specialty: 'Clinical Psychologist - CBT Specialist',
+      specialties: ['CBT Specialist', 'Anxiety & Depression'],
       address: '123 Wellness Center, Main Street',
       phone: '+1 (555) 123-4567',
+      website: 'https://example.com/dr-mitchell',
       rating: 4.9,
       location: { lat: userLat + 0.008, lng: userLng + 0.005 },
       openNow: true
@@ -112,9 +77,10 @@ const getMockTherapists = (userLat: number, userLng: number): Therapist[] => {
     {
       id: '2',
       name: 'Dr. James Chen',
-      specialty: 'Psychiatrist - Anxiety & Depression',
+      specialties: ['Anxiety & Depression', 'Stress Management'],
       address: '456 Mental Health Clinic, Oak Avenue',
       phone: '+1 (555) 234-5678',
+      website: 'https://example.com/dr-chen',
       rating: 4.8,
       location: { lat: userLat - 0.012, lng: userLng + 0.008 },
       openNow: true
@@ -122,7 +88,7 @@ const getMockTherapists = (userLat: number, userLng: number): Therapist[] => {
     {
       id: '3',
       name: 'Dr. Emily Rodriguez',
-      specialty: 'Licensed Marriage & Family Therapist',
+      specialties: ['Relationships', 'Family Therapy'],
       address: '789 Healing Space, Elm Street',
       phone: '+1 (555) 345-6789',
       rating: 4.7,
@@ -132,9 +98,10 @@ const getMockTherapists = (userLat: number, userLng: number): Therapist[] => {
     {
       id: '4',
       name: 'Dr. Michael Thompson',
-      specialty: 'DBT Certified Therapist',
+      specialties: ['CBT Specialist', 'Trauma & PTSD'],
       address: '321 Mindful Center, Pine Road',
       phone: '+1 (555) 456-7890',
+      website: 'https://example.com/dr-thompson',
       rating: 4.9,
       location: { lat: userLat - 0.005, lng: userLng - 0.015 },
       openNow: true
@@ -142,7 +109,7 @@ const getMockTherapists = (userLat: number, userLng: number): Therapist[] => {
     {
       id: '5',
       name: 'Dr. Amanda Foster',
-      specialty: 'Trauma & PTSD Specialist',
+      specialties: ['Trauma & PTSD', 'Stress Management'],
       address: '654 Recovery Institute, Cedar Lane',
       phone: '+1 (555) 567-8901',
       rating: 4.6,
@@ -152,9 +119,10 @@ const getMockTherapists = (userLat: number, userLng: number): Therapist[] => {
     {
       id: '6',
       name: 'Serenity Mental Health Clinic',
-      specialty: 'Comprehensive Mental Health Services',
+      specialties: ['Anxiety & Depression', 'Relationships', 'Stress Management'],
       address: '987 Tranquil Way, Birch Boulevard',
       phone: '+1 (555) 678-9012',
+      website: 'https://example.com/serenity',
       rating: 4.5,
       location: { lat: userLat - 0.018, lng: userLng + 0.022 },
       openNow: false
@@ -162,7 +130,7 @@ const getMockTherapists = (userLat: number, userLng: number): Therapist[] => {
     {
       id: '7',
       name: 'Dr. Robert Kim',
-      specialty: 'Child & Adolescent Psychiatrist',
+      specialties: ['Family Therapy', 'Anxiety & Depression'],
       address: '147 Youth Wellness Center, Maple Drive',
       phone: '+1 (555) 789-0123',
       rating: 4.8,
@@ -172,9 +140,10 @@ const getMockTherapists = (userLat: number, userLng: number): Therapist[] => {
     {
       id: '8',
       name: 'Mindful Living Counseling',
-      specialty: 'Mindfulness-Based Therapy',
+      specialties: ['Stress Management', 'CBT Specialist'],
       address: '258 Zen Plaza, Willow Street',
       phone: '+1 (555) 890-1234',
+      website: 'https://example.com/mindful-living',
       rating: 4.7,
       location: { lat: userLat - 0.010, lng: userLng - 0.025 },
       openNow: true
@@ -183,12 +152,8 @@ const getMockTherapists = (userLat: number, userLng: number): Therapist[] => {
 
   return mockTherapists.map(t => ({
     ...t,
-    distance: formatDistance(calculateDistance(userLat, userLng, t.location.lat, t.location.lng))
-  })).sort((a, b) => {
-    const distA = parseFloat(a.distance || '0');
-    const distB = parseFloat(b.distance || '0');
-    return distA - distB;
-  });
+    distance: calculateDistance(userLat, userLng, t.location.lat, t.location.lng)
+  })).sort((a, b) => (a.distance || 0) - (b.distance || 0));
 };
 
 // Get directions URL
@@ -222,4 +187,3 @@ export const geocodeAddress = async (address: string): Promise<{ lat: number; ln
     return null;
   }
 };
-

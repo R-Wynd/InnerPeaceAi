@@ -1,24 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, User, Sparkles, Brain, Heart, Loader2 } from 'lucide-react';
-import { sendChatMessage, generateCBTExercise, generateDBTSkill } from '../services/gptService';
+import { sendChatMessage, generateCBTExercise, generateDBTSkill } from '../services/geminiService';
 import type { Message } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import './Chatbot.css';
 
-const INTRO_MESSAGE = `Hello! I'm InnerPeace AI, your compassionate mental health support companion. 🌱
-
-I'm here to:
-• Listen without judgment
-• Guide you through CBT & DBT exercises
-• Help you explore your thoughts and feelings
-• Teach coping strategies and mindfulness
-
-How are you feeling today? What's on your mind?`;
-
 const Chatbot: React.FC = () => {
-  // Only conversation messages are stored here (user + assistant),
-  // the intro text is rendered separately so it never conflicts
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -45,25 +32,25 @@ const Chatbot: React.FC = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
     setIsLoading(true);
 
     try {
-      const conversationHistory = messages.map(m => ({
-        role: m.role,
-        content: m.content
-      }));
-
       let response: string;
-      
+
       if (selectedExercise === 'cbt') {
-        response = await generateCBTExercise(input.trim());
+        response = await generateCBTExercise(currentInput);
         setSelectedExercise(null);
       } else if (selectedExercise === 'dbt') {
-        response = await generateDBTSkill(input.trim());
+        response = await generateDBTSkill(currentInput);
         setSelectedExercise(null);
       } else {
-        response = await sendChatMessage(input.trim(), conversationHistory);
+        const conversationHistory = messages.map(m => ({
+          role: m.role,
+          content: m.content
+        }));
+        response = await sendChatMessage(currentInput, conversationHistory);
       }
 
       const assistantMessage: Message = {
@@ -75,11 +62,11 @@ const Chatbot: React.FC = () => {
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Chat error:', error);
       const errorMessage: Message = {
         id: uuidv4(),
         role: 'assistant',
-        content: "I apologize, but I'm having trouble responding right now. Please try again in a moment. Remember, if you're in crisis, please contact the 988 Suicide & Crisis Lifeline.",
+        content: "I'm sorry, I'm having trouble connecting right now. Please try again in a moment. 💜",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -97,114 +84,113 @@ const Chatbot: React.FC = () => {
 
   const handleQuickAction = (type: 'cbt' | 'dbt') => {
     setSelectedExercise(type);
-    const prompt = type === 'cbt' 
-      ? "I'd like to try a CBT exercise. "
-      : "I'd like to learn a DBT skill. ";
-    setInput(prompt);
     inputRef.current?.focus();
   };
 
   const formatMessage = (content: string) => {
-    // Convert markdown-like formatting
-    return content
-      .split('\n')
-      .map((line, i) => {
-        // Bold text
-        line = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        // Italic text
-        line = line.replace(/\*(.*?)\*/g, '<em>$1</em>');
-        
-        return (
-          <span key={i}>
-            <span dangerouslySetInnerHTML={{ __html: line }} />
-            {i < content.split('\n').length - 1 && <br />}
-          </span>
-        );
-      });
+    return content.split('\n').map((line, index) => (
+      <React.Fragment key={index}>
+        {line}
+        {index < content.split('\n').length - 1 && <br />}
+      </React.Fragment>
+    ));
   };
 
   return (
     <div className="chatbot-container">
-      <div className="chatbot-header">
-        <div className="header-icon">
-          <Bot size={28} />
+      {/* Header */}
+      <header className="chatbot-header">
+        <div className="header-content">
+          <div className="bot-avatar">
+            <span style={{ fontSize: '22px' }}>🌿</span>
+          </div>
+          <div className="header-text">
+            <h1>InnerPeace AI</h1>
+            <p>
+              <span className="status-dot"></span>
+              Always here for you
+            </p>
+          </div>
         </div>
-        <div className="header-text">
-          <h2>InnerPeace AI</h2>
-          <span className="status">
-            <span className="status-dot"></span>
-            Always here for you
-          </span>
-        </div>
-      </div>
+      </header>
 
+      {/* Quick Actions */}
       <div className="quick-actions">
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className={`quick-action-btn cbt ${selectedExercise === 'cbt' ? 'active' : ''}`}
+        <button
+          className={`quick-btn primary ${selectedExercise === 'cbt' ? 'active' : ''}`}
           onClick={() => handleQuickAction('cbt')}
         >
-          <Brain size={18} />
+          <span>🧠</span>
           <span>CBT Exercise</span>
-        </motion.button>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className={`quick-action-btn dbt ${selectedExercise === 'dbt' ? 'active' : ''}`}
+        </button>
+        <button
+          className={`quick-btn secondary ${selectedExercise === 'dbt' ? 'active' : ''}`}
           onClick={() => handleQuickAction('dbt')}
         >
-          <Heart size={18} />
-          <span>DBT Skill</span>
-        </motion.button>
+          <span>🌊</span>
+          <span>DBT Skills</span>
+        </button>
+        <button
+          className="quick-btn"
+          onClick={() => {
+            setInput("I need to talk about how I'm feeling");
+            inputRef.current?.focus();
+          }}
+        >
+          <span>💬</span>
+          <span>Just Talk</span>
+        </button>
       </div>
 
+      {/* Messages */}
       <div className="messages-container">
-        <AnimatePresence>
-          {/* Static intro message at the top */}
-          <motion.div
-            key="intro-message"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            className="message assistant"
-          >
-            <div className="message-avatar">
-              <Bot size={20} />
+        {/* Welcome Message */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="message assistant welcome-message"
+        >
+          <div className="message-avatar">
+            <span style={{ fontSize: '18px' }}>🌿</span>
+          </div>
+          <div className="message-content">
+            <div className="message-bubble">
+              <p>Hello! I'm InnerPeace AI 🌱</p>
+              <p>I'm here to support you with:</p>
+              <ul>
+                <li>💬 Empathetic conversations</li>
+                <li>🧠 CBT thought exercises</li>
+                <li>🌊 DBT emotion skills</li>
+                <li>🧘 Mindfulness & coping</li>
+              </ul>
+              <p>How are you feeling today? ✨</p>
             </div>
-            <div className="message-content">
-              <div className="message-bubble">
-                {formatMessage(INTRO_MESSAGE)}
-              </div>
-            </div>
-          </motion.div>
+          </div>
+        </motion.div>
 
-          {/* Dynamic conversation messages */}
+        <AnimatePresence>
           {messages.map((message, index) => (
             <motion.div
               key={message.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
+              transition={{ duration: 0.3, delay: index * 0.02 }}
               className={`message ${message.role}`}
             >
               <div className="message-avatar">
-                {message.role === 'assistant' ? (
-                  <Bot size={20} />
-                ) : (
-                  <User size={20} />
-                )}
+                <span style={{ fontSize: '18px' }}>
+                  {message.role === 'assistant' ? '🌿' : '😊'}
+                </span>
               </div>
               <div className="message-content">
                 <div className="message-bubble">
                   {formatMessage(message.content)}
                 </div>
                 <span className="message-time">
-                  {new Date(message.timestamp).toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
+                  {new Date(message.timestamp).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit'
                   })}
                 </span>
               </div>
@@ -212,34 +198,56 @@ const Chatbot: React.FC = () => {
           ))}
         </AnimatePresence>
 
+        {/* Loading */}
         {isLoading && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="message assistant"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="loading-indicator"
           >
-            <div className="message-avatar">
-              <Bot size={20} />
+            <div className="message-avatar" style={{ background: 'linear-gradient(135deg, var(--primary-400), var(--primary-600))' }}>
+              <span style={{ fontSize: '18px' }}>🌿</span>
             </div>
-            <div className="message-content">
-              <div className="message-bubble typing">
-                <Loader2 className="spinning" size={18} />
-                <span>Thinking with compassion...</span>
-              </div>
+            <div className="typing-dots">
+              <span></span>
+              <span></span>
+              <span></span>
             </div>
           </motion.div>
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Input Area */}
       <div className="input-container">
         {selectedExercise && (
-          <div className="exercise-indicator">
-            <Sparkles size={14} />
-            <span>
-              {selectedExercise === 'cbt' ? 'CBT Exercise Mode' : 'DBT Skill Mode'}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            background: selectedExercise === 'cbt' ? 'var(--primary-50)' : 'var(--accent-50)',
+            borderRadius: 'var(--radius-lg)',
+            marginBottom: '12px',
+            fontSize: '0.85rem',
+            color: selectedExercise === 'cbt' ? 'var(--primary-700)' : 'var(--accent-700)'
+          }}>
+            <span>{selectedExercise === 'cbt' ? '🧠' : '🌊'}</span>
+            <span style={{ flex: 1 }}>
+              {selectedExercise === 'cbt' 
+                ? 'Describe a thought to analyze' 
+                : 'Share what emotion you need help with'}
             </span>
-            <button onClick={() => setSelectedExercise(null)}>×</button>
+            <button 
+              onClick={() => setSelectedExercise(null)}
+              style={{ 
+                background: 'none', 
+                padding: '4px',
+                color: 'inherit',
+                opacity: 0.6
+              }}
+            >✕</button>
           </div>
         )}
         <div className="input-wrapper">
@@ -248,23 +256,28 @@ const Chatbot: React.FC = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Share what's on your mind..."
+            placeholder="Type your message..."
             rows={1}
             disabled={isLoading}
           />
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+          <button 
             className="send-btn"
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
           >
-            <Send size={20} />
-          </motion.button>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 2L11 13" />
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+            </svg>
+          </button>
         </div>
-        <p className="disclaimer">
-          InnerPeace AI provides support but is not a replacement for professional mental health care.
-          If you're in crisis, call 988.
+        <p style={{
+          textAlign: 'center',
+          fontSize: '0.75rem',
+          color: 'var(--text-muted)',
+          marginTop: '12px'
+        }}>
+          💜 This is supportive AI, not a replacement for professional help
         </p>
       </div>
     </div>
@@ -272,4 +285,3 @@ const Chatbot: React.FC = () => {
 };
 
 export default Chatbot;
-
