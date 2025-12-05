@@ -1,0 +1,167 @@
+.profile-prompt {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+  max-width: 600px;
+  width: calc(100% - 2rem);
+  animation: slideDown 0.4s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.profile-prompt-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  flex-wrap: wrap;
+}
+
+.profile-prompt-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.profile-prompt-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.profile-prompt-text h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.profile-prompt-text p {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.95;
+  line-height: 1.4;
+}
+
+.profile-prompt-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.profile-prompt-btn-primary,
+.profile-prompt-btn-secondary {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.profile-prompt-btn-primary {
+  background: white;
+  color: #667eea;
+}
+
+.profile-prompt-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+}
+
+.profile-prompt-btn-secondary {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.profile-prompt-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.profile-prompt-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  line-height: 1;
+}
+
+.profile-prompt-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg);
+}
+
+@media (max-width: 768px) {
+  .profile-prompt {
+    top: 0.5rem;
+    width: calc(100% - 1rem);
+  }
+
+  .profile-prompt-content {
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  .profile-prompt-text h3 {
+    font-size: 1rem;
+  }
+
+  .profile-prompt-text p {
+    font-size: 0.85rem;
+  }
+
+  .profile-prompt-actions {
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+
+  .profile-prompt-btn-primary,
+  .profile-prompt-btn-secondary {
+    flex: 1;
+    text-align: center;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-prompt-icon {
+    font-size: 1.5rem;
+  }
+
+  .profile-prompt-actions {
+    flex-direction: column;
+  }
+
+  .profile-prompt-btn-primary,
+  .profile-prompt-btn-secondary {
+    width: 100%;
+  }
+}

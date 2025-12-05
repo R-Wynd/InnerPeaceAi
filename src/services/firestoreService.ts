@@ -74,6 +74,8 @@ import {
   updateDoc, 
   deleteDoc, 
   getDocs, 
+  getDoc,
+  setDoc,
   query, 
   where, 
   orderBy, 
@@ -81,7 +83,7 @@ import {
   limit 
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import type { MoodEntry, JournalEntry, ChatSession, Message } from '../types';
+import type { MoodEntry, JournalEntry, ChatSession, Message, UserProfile } from '../types';
 
 // In-memory storage for demo mode (when Firebase is not configured)
 let localMoodEntries: MoodEntry[] = [];
@@ -462,5 +464,65 @@ export const getMoodPatterns = async (userId: string, days: number = 30): Promis
     commonEmotions,
     entriesCount: entries.length
   };
+};
+
+// User Profile Management
+let localUserProfiles: Record<string, UserProfile> = {};
+
+export const saveUserProfile = async (userId: string, profile: UserProfile): Promise<void> => {
+  if (isDemoMode()) {
+    localUserProfiles[userId] = profile;
+    console.log('[InnerPeace] Saved user profile to local storage (demo mode)');
+    return;
+  }
+
+  try {
+    const payload = removeUndefined({
+      ...profile,
+      completedAt: Timestamp.fromDate(profile.completedAt)
+    });
+    console.log('[InnerPeace] Saving user profile to Firestore...', { userId });
+    await withTimeout(
+      setDoc(doc(db, 'userProfiles', userId), payload),
+      8000,
+      'setDoc(userProfiles)'
+    );
+    console.log('[InnerPeace] ✓ User profile saved successfully');
+  } catch (error) {
+    console.error('[InnerPeace] Error saving user profile to Firestore:', error);
+    console.log('[InnerPeace] Falling back to local storage');
+    localUserProfiles[userId] = profile;
+  }
+};
+
+export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
+  if (isDemoMode()) {
+    const profile = localUserProfiles[userId] || null;
+    console.log('[InnerPeace] Retrieved user profile from local storage (demo mode)');
+    return profile;
+  }
+
+  try {
+    console.log('[InnerPeace] Fetching user profile from Firestore for user:', userId);
+    const docRef = doc(db, 'userProfiles', userId);
+    const docSnap = await withTimeout(getDoc(docRef), 8000, 'getDoc(userProfiles)');
+    
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      const profile: UserProfile = {
+        ...data,
+        completedAt: data.completedAt?.toDate() || new Date()
+      } as UserProfile;
+      console.log('[InnerPeace] ✓ User profile retrieved successfully');
+      return profile;
+    } else {
+      console.log('[InnerPeace] No user profile found');
+      return null;
+    }
+  } catch (error) {
+    console.error('[InnerPeace] Error fetching user profile from Firestore:', error);
+    console.log('[InnerPeace] Falling back to local storage');
+    return localUserProfiles[userId] || null;
+  }
 };
 

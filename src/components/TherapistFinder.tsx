@@ -26,7 +26,8 @@ const TherapistFinder: React.FC = () => {
     setError(null);
 
     try {
-      const coords = await getCurrentLocation();
+      const position = await getCurrentLocation();
+      const coords = position.coords;
       setLocation({ lat: coords.latitude, lng: coords.longitude });
       
       const results = await searchNearbyTherapists(

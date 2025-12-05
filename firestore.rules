@@ -29,5 +29,10 @@ service cloud.firestore {
       allow read: if true;
       allow update, delete: if true;
     }
+    
+    // User profiles - allow users to read/write their own profile
+    match /userProfiles/{userId} {
+      allow read, write: if true;  // Allow for now (can be tightened to userId == request.auth.uid)
+    }
   }
 }

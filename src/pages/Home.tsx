@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   MessageCircle, 
@@ -27,7 +27,8 @@ const MOOD_EMOJIS: Record<number, string> = {
 };
 
 const Home: React.FC = () => {
-  const { user, login, logout } = useUser();
+  const { user, login } = useUser();
+  const navigate = useNavigate();
   const [greeting, setGreeting] = useState('');
   const [showLogin, setShowLogin] = useState(false);
   const [name, setName] = useState('');
@@ -125,13 +126,13 @@ const Home: React.FC = () => {
             <TimeIcon size={20} className="time-icon" />
             <span className="greeting-text">{greeting}</span>
           </div>
-          <h1 className="user-name">
+          <div className="user-name">
             {user ? user.name.split(' ')[0] : 'Friend'} 👋
-          </h1>
+          </div>
         </div>
         
         {user ? (
-          <button className="profile-btn" onClick={() => logout()}>
+          <button className="profile-btn" onClick={() => navigate('/profile')}>
             <span className="profile-initial">{user.name.charAt(0)}</span>
           </button>
         ) : (

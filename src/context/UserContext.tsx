@@ -1,22 +1,35 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import {
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile as updateFirebaseProfile,
+  type User as FirebaseUser,
+} from 'firebase/auth';
 import { auth } from '../config/firebase';
-import { v4 as uuidv4 } from 'uuid';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  createdAt: Date;
-}
+import type { User, UserProfile } from '../types';
+import { saveUserProfile, getUserProfile } from '../services/firestoreService';
 
 interface UserContextType {
   user: User | null;
   isLoading: boolean;
-  login: (name: string, email: string) => void;
-  logout: () => void;
+  /**
+   * Sign in an existing user with email and password.
+   */
+  login: (email: string, password: string) => Promise<void>;
+  /**
+   * Register a new user with email and password, then sync with context.
+   */
+  register: (name: string, email: string, password: string) => Promise<void>;
+  /**
+   * Sign out the current user.
+   */
+  logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
+  completeProfile: (data: { name: string; email: string; profile: Omit<UserProfile, 'completedAt'> }) => Promise<void>;
+  hasCompletedProfile: boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -36,102 +49,84 @@ interface UserProviderProps {
 export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasCompletedProfile, setHasCompletedProfile] = useState(false);
+
+  const buildUserFromFirebase = async (firebaseUser: FirebaseUser): Promise<User> => {
+    // Try to fetch profile from Firestore
+    const profile = await getUserProfile(firebaseUser.uid);
+
+    return {
+      id: firebaseUser.uid,
+      name: firebaseUser.displayName || 'User',
+      email: firebaseUser.email || '',
+      createdAt: new Date(firebaseUser.metadata.creationTime || Date.now()),
+      profile: profile || undefined,
+    };
+  };
 
   useEffect(() => {
     let isMounted = true;
-    
-    const initializeUser = async () => {
-      console.log('[InnerPeace] Initializing user authentication...');
+    console.log('[InnerPeace] Initializing Firebase Auth listener...');
       
-      // Try Firebase Auth first
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (!isMounted) return;
         
-        const savedData = localStorage.getItem('innerpeace_user_data');
-        let userData: { name?: string; email?: string } = {};
-        if (savedData) {
-          try {
-            userData = JSON.parse(savedData);
-          } catch (e) {
-            console.error('[InnerPeace] Error parsing user data:', e);
-          }
-        }
-        
         if (firebaseUser) {
-          // Firebase Auth user exists
+        try {
           console.log('[InnerPeace] ✓ Firebase Auth user:', firebaseUser.uid);
-          setUser({
-            id: firebaseUser.uid,
-            name: userData.name || 'User',
-            email: userData.email || '',
-            createdAt: new Date(firebaseUser.metadata.creationTime || Date.now())
-          });
-          setIsLoading(false);
-        } else {
-          // Try to sign in anonymously
-          try {
-            console.log('[InnerPeace] Attempting anonymous sign-in...');
-            const credential = await signInAnonymously(auth);
-            console.log('[InnerPeace] ✓ Anonymous sign-in successful:', credential.user.uid);
-            // onAuthStateChanged will be triggered with the new user
-          } catch (error: any) {
-            console.warn('[InnerPeace] Anonymous auth failed:', error.code);
-            console.log('[InnerPeace] Falling back to local UUID-based auth');
-            
-            // Fallback: use persistent UUID stored in localStorage
-            let fallbackId = localStorage.getItem('innerpeace_fallback_uid');
-            if (!fallbackId) {
-              fallbackId = uuidv4();
-              localStorage.setItem('innerpeace_fallback_uid', fallbackId);
-              console.log('[InnerPeace] ✓ Generated new fallback UID:', fallbackId);
-            } else {
-              console.log('[InnerPeace] ✓ Using existing fallback UID:', fallbackId);
-            }
-            
+          const builtUser = await buildUserFromFirebase(firebaseUser);
+          setUser(builtUser);
+          setHasCompletedProfile(!!builtUser.profile);
+        } catch (error) {
+          console.error('[InnerPeace] Error building user from Firebase:', error);
             setUser({
-              id: fallbackId,
-              name: userData.name || 'User',
-              email: userData.email || '',
-              createdAt: new Date()
+              id: firebaseUser.uid,
+            name: firebaseUser.displayName || 'User',
+            email: firebaseUser.email || '',
+              createdAt: new Date(firebaseUser.metadata.creationTime || Date.now()),
             });
-            setIsLoading(false);
+            setHasCompletedProfile(false);
           }
-        }
-      });
+        } else {
+        console.log('[InnerPeace] No authenticated user');
+        setUser(null);
+        setHasCompletedProfile(false);
+      }
 
-      return unsubscribe;
-    };
-    
-    const unsubscribePromise = initializeUser();
+            setIsLoading(false);
+      });
 
     return () => {
       isMounted = false;
-      unsubscribePromise.then(unsub => unsub && unsub());
+      unsubscribe();
     };
   }, []);
 
-  const login = (name: string, email: string) => {
-    // Store name/email in localStorage (user.id comes from Firebase Auth)
-    const userData = { name, email };
-    localStorage.setItem('innerpeace_user_data', JSON.stringify(userData));
-    
-    if (user) {
-      // Update existing user with new name/email
-      const updatedUser = { ...user, name, email };
-      setUser(updatedUser);
+  const register = async (name: string, email: string, password: string) => {
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const firebaseUser = credential.user;
+
+    try {
+      await updateFirebaseProfile(firebaseUser, { displayName: name });
+    } catch (error) {
+      console.warn('[InnerPeace] Failed to update Firebase displayName:', error);
     }
+
+    const builtUser = await buildUserFromFirebase(firebaseUser);
+    setUser(builtUser);
+    setHasCompletedProfile(!!builtUser.profile);
   };
 
-  const logout = () => {
-    // Clear user data but keep anonymous auth (or could call auth.signOut())
+  const login = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
+    // onAuthStateChanged will update the user state
+  };
+
+  const logout = async () => {
     localStorage.removeItem('innerpeace_user_data');
-    if (user) {
-      setUser({
-        ...user,
-        name: 'User',
-        email: ''
-      });
-    }
+    localStorage.removeItem('profile_prompt_dismissed');
+    await signOut(auth);
+    // onAuthStateChanged will clear user state
   };
 
   const updateUser = (updates: Partial<User>) => {
@@ -155,8 +150,38 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     }
   };
 
+  const completeProfile = async (data: { name: string; email: string; profile: Omit<UserProfile, 'completedAt'> }) => {
+    if (!user) {
+      throw new Error('User must be authenticated to complete profile');
+    }
+
+    const fullProfile: UserProfile = {
+      ...data.profile,
+      completedAt: new Date()
+    };
+
+    // Save to Firestore
+    await saveUserProfile(user.id, fullProfile);
+
+    // Update local user state
+    const updatedUser: User = {
+      ...user,
+      name: data.name,
+      email: data.email,
+      profile: fullProfile
+    };
+    setUser(updatedUser);
+    setHasCompletedProfile(true);
+
+    // Optionally keep basic user data in localStorage for UX continuity
+    const userData = { name: data.name, email: data.email };
+    localStorage.setItem('innerpeace_user_data', JSON.stringify(userData));
+  };
+
   return (
-    <UserContext.Provider value={{ user, isLoading, login, logout, updateUser }}>
+    <UserContext.Provider
+      value={{ user, isLoading, login, register, logout, updateUser, completeProfile, hasCompletedProfile }}
+    >
       {children}
     </UserContext.Provider>
   );

@@ -1,15 +1,15 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Home, MessageCircle, Smile, BookOpen, MapPin } from 'lucide-react';
+import { Home, MessageCircle, Smile, BookOpen, User } from 'lucide-react';
 import './Navigation.css';
 
 const navItems = [
-  { path: '/', label: 'Home', Icon: Home },
+  { path: '/home', label: 'Home', Icon: Home },
   { path: '/chat', label: 'Chat', Icon: MessageCircle },
   { path: '/mood', label: 'Mood', Icon: Smile },
   { path: '/journal', label: 'Journal', Icon: BookOpen },
-  { path: '/therapists', label: 'Help', Icon: MapPin }
+  { path: '/profile', label: 'Profile', Icon: User }
 ];
 
 const Navigation: React.FC = () => {

@@ -1,8 +1,21 @@
+export interface UserProfile {
+  age: number;
+  gender: string;
+  relationshipStatus: string;
+  occupation: string;
+  currentMood: string;
+  medicalHistory: string;
+  physicalActivities: string[];
+  mentalActivities: string[];
+  completedAt: Date;
+}
+
 export interface User {
   id: string;
   email: string;
   name: string;
   createdAt: Date;
+  profile?: UserProfile;
 }
 
 export interface Message {

@@ -311,6 +311,7 @@
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--neutral-100);
   transition: all 0.2s ease;
+  overflow: hidden;
 }
 
 .entry-card:hover {
@@ -381,6 +382,7 @@
   padding: 8px 12px;
   background: var(--primary-50);
   border-radius: var(--radius-md);
+  overflow-wrap: anywhere;
 }
 
 .entry-content {
@@ -388,6 +390,7 @@
   color: var(--text-secondary);
   line-height: 1.6;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Delete Confirmation */

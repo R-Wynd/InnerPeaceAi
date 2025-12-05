@@ -35,10 +35,20 @@ Always end crisis situations with: "If you're in crisis, please contact the 988 
 
 export const sendChatMessage = async (
   message: string,
-  conversationHistory: { role: string; content: string }[]
+  conversationHistory: { role: string; content: string }[],
+  userProfile?: {
+    age: number;
+    gender: string;
+    relationshipStatus: string;
+    occupation: string;
+    currentMood: string;
+    medicalHistory: string;
+    physicalActivities: string[];
+    mentalActivities: string[];
+  }
 ): Promise<string> => {
   try {
-    const result = await callGeminiAPI(message, conversationHistory);
+    const result = await callGeminiAPI(message, conversationHistory, userProfile);
     if (!result) {
       return getMockResponse(message);
     }
@@ -129,7 +139,17 @@ Keep the response compassionate and practical.`;
 // Gemini API call with conversation history (multi-turn)
 async function callGeminiAPI(
   message: string,
-  conversationHistory: { role: string; content: string }[]
+  conversationHistory: { role: string; content: string }[],
+  userProfile?: {
+    age: number;
+    gender: string;
+    relationshipStatus: string;
+    occupation: string;
+    currentMood: string;
+    medicalHistory: string;
+    physicalActivities: string[];
+    mentalActivities: string[];
+  }
 ): Promise<string | null> {
   if (!GEMINI_API_KEY) {
     console.log('No Gemini API key configured. Using mock responses.');
@@ -140,12 +160,28 @@ async function callGeminiAPI(
   try {
     console.log('Calling Gemini 2.0 Flash API...');
 
+    // Build personalized context if profile exists
+    let personalizedContext = '';
+    if (userProfile) {
+      personalizedContext = `\n\nUSER CONTEXT (use this to personalize your responses):
+- Age: ${userProfile.age}
+- Gender: ${userProfile.gender}
+- Relationship Status: ${userProfile.relationshipStatus}
+- Occupation: ${userProfile.occupation}
+- Current Mood: ${userProfile.currentMood}
+- Medical/Mental Health History: ${userProfile.medicalHistory}
+- Physical Activities: ${userProfile.physicalActivities.join(', ')}
+- Mental Wellness Activities: ${userProfile.mentalActivities.join(', ')}
+
+Use this context to provide more personalized and relevant advice, but don't explicitly mention you have this information unless it's natural in conversation. Focus on being helpful and supportive based on their specific situation.`;
+    }
+
     // Build contents array with system instruction and conversation history
     const contents = [
       // System instruction as first user message
       {
         role: 'user',
-        parts: [{ text: `Instructions for you: ${THERAPEUTIC_SYSTEM_PROMPT}\n\nNow respond to the user's messages.` }]
+        parts: [{ text: `Instructions for you: ${THERAPEUTIC_SYSTEM_PROMPT}${personalizedContext}\n\nNow respond to the user's messages.` }]
       },
       {
         role: 'model',
